@@ -29,13 +29,11 @@ public class SplashScreen extends AppCompatActivity {
 
         ImageView splashGif = findViewById(R.id.splashGif);
 
-        // Carregar GIF com Glide
         Glide.with(this)
                 .asGif()
                 .load(R.drawable.splash)
                 .into(splashGif);
 
-        // Esperar alguns segundos e abrir a MainActivity
         new Handler().postDelayed(() -> {
             Intent i = new Intent(SplashScreen.this, MainActivity.class);
             startActivity(i);

@@ -1,0 +1,16 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Sombra -->
+    <item android:top="2dp" android:left="2dp">
+        <shape>
+            <corners android:radius="12dp" />
+            <solid android:color="#20000000" />
+        </shape>
+    </item>
+    <!-- Background principal -->
+    <item android:bottom="2dp" android:right="2dp">
+        <shape>
+            <corners android:radius="24dp" />
+            <solid android:color="#FA7F05" />
+        </shape>
+    </item>
+</layer-list>
