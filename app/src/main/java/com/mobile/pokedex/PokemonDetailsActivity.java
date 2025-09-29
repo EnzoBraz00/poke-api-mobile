@@ -240,7 +240,7 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
 
     private void loadRelatedPokemonsWithGemini(String pokemonName, String pokemonTypes) {
         try {
-            GenerativeModel geminiModel = new GenerativeModel("gemini-2.5-flash", "AIzaSyDhQlmvaVvmL4fv_GsJRQndKU-O0dCOY8o");
+            GenerativeModel geminiModel = new GenerativeModel("gemini-2.5-flash", "");
 
             GenerativeModelFutures model = GenerativeModelFutures.from(geminiModel);
 
