@@ -91,29 +91,42 @@ public class PokemonDetails {
     }
 
     public static class Sprites {
+        @SerializedName("front_default")
+        private String frontDefault;
+
         @SerializedName("other")
         private OtherSprites other;
 
-        public OtherSprites getOther() {
-            return other;
-        }
+        @SerializedName("cries")
+        private Cries cries;
+
+        public OtherSprites getOther() { return other; }
+        public Cries getCries() { return cries; }
+        public String getFrontDefault() { return frontDefault; }
+    }
+
+    public static class Cries {
+        @SerializedName("latest")
+        private String latest;
+
+        public String getLatest() { return latest; }
     }
 
     public static class OtherSprites {
         @SerializedName("official-artwork")
         private OfficialArtwork officialArtwork;
 
-        public OfficialArtwork getOfficialArtwork() {
-            return officialArtwork;
-        }
+        public OfficialArtwork getOfficialArtwork() { return officialArtwork; }
     }
 
     public static class OfficialArtwork {
         @SerializedName("front_default")
         private String frontDefault;
 
-        public String getFrontDefault() {
-            return frontDefault;
-        }
+        @SerializedName("front_shiny")
+        private String frontShiny;
+
+        public String getFrontDefault() { return frontDefault; }
+        public String getFrontShiny() { return frontShiny; }
     }
 }

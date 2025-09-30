@@ -1,6 +1,7 @@
 package com.mobile.pokedex;
 
 import android.content.Intent;
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.ImageView;
@@ -28,6 +29,7 @@ import com.mobile.pokedex.listener.OnPokemonClickListener;
 import com.mobile.pokedex.model.Pokemon;
 import com.mobile.pokedex.model.PokemonDetails;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -64,8 +66,8 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
     private PokeApi pokeApi;
     private Gson gson;
 
-    private final List<Pokemon> loadedEvolutionPokemons = new ArrayList<>();
-    private final List<Pokemon> loadedSimilarPokemons = new ArrayList<>();
+    private boolean isShiny = false;
+    private MediaPlayer mediaPlayer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -112,16 +114,17 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
         specialDefense = findViewById(R.id.specialDefense);
         speed = findViewById(R.id.speed);
 
+        imageBig.setOnClickListener(null);
+
         RecyclerView evolutionChainRecycler = findViewById(R.id.evolutionChainRecycler);
         RecyclerView similarPokemonsRecycler = findViewById(R.id.similarPokemonsRecycler);
 
         int spacingInPixels = getResources().getDimensionPixelSize(R.dimen.item_margin_horizontal);
         int spacingInPixels2 = getResources().getDimensionPixelSize(R.dimen.item_margin_vertical);
 
-        DetailsSpacingItemDecoration itemDecoration = new DetailsSpacingItemDecoration(spacingInPixels, spacingInPixels2);
+        com.mobile.pokedex.DetailsSpacingItemDecoration itemDecoration = new com.mobile.pokedex.DetailsSpacingItemDecoration(spacingInPixels, spacingInPixels2);
 
         evolutionChainRecycler.addItemDecoration(itemDecoration);
-
         similarPokemonsRecycler.addItemDecoration(itemDecoration);
 
         evolutionChainRecycler.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
@@ -140,6 +143,8 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
             public void onResponse(@NonNull Call<PokemonDetails> call, @NonNull Response<PokemonDetails> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     PokemonDetails details = response.body();
+
+                    setupImageTapFeature(details);
 
                     nameBig.setText(capitalize(details.getName()));
                     numberBig.setText(String.valueOf(details.getId()));
@@ -169,6 +174,93 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
                 Log.e("DetailsActivity", "Falha na requisição: " + t.getMessage());
             }
         });
+    }
+
+    private void setupImageTapFeature(PokemonDetails details) {
+        imageBig.setOnClickListener(v -> {
+            if (details == null || details.getSprites() == null) return;
+
+            isShiny = !isShiny;
+            updatePokemonSprite(details);
+
+            int pokemonId = details.getId();
+
+            // Construção manual da URL do som
+            String cryUrl = String.format(
+                    "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/%d.ogg",
+                    pokemonId
+            );
+
+            Log.d("Audio", "URL de som construída: " + cryUrl);
+            playPokemonCry(cryUrl);
+        });
+    }
+
+    private void updatePokemonSprite(PokemonDetails details) {
+        String imageUrl;
+
+        PokemonDetails.OfficialArtwork officialArtwork = details.getSprites().getOther().getOfficialArtwork();
+
+        if (isShiny) {
+            imageUrl = officialArtwork.getFrontShiny();
+        } else {
+            imageUrl = officialArtwork.getFrontDefault();
+        }
+
+        if (imageUrl != null) {
+            Glide.with(this).load(imageUrl).into(imageBig);
+        } else {
+            Log.w("Sprite", "URL do Official Artwork Shiny não encontrada para o Pokémon.");
+        }
+    }
+
+    private void playPokemonCry(String url) {
+        if (url == null || url.isEmpty()) {
+            Log.w("Audio", "URL do som do Pokémon é nula ou vazia.");
+            Toast.makeText(this, "Som indisponível para este Pokémon.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (mediaPlayer != null) {
+            mediaPlayer.release();
+            mediaPlayer = null;
+        }
+
+        try {
+            mediaPlayer = new MediaPlayer();
+            mediaPlayer.setDataSource(url);
+            mediaPlayer.prepareAsync();
+
+            mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                Log.e("Audio", "Erro no MediaPlayer. What: " + what + ", Extra: " + extra);
+                mp.release();
+                mediaPlayer = null;
+                return true;
+            });
+
+            mediaPlayer.setOnPreparedListener(MediaPlayer::start);
+
+            mediaPlayer.setOnCompletionListener(mp -> {
+                mp.release();
+                mediaPlayer = null;
+            });
+
+        } catch (IOException e) {
+            Log.e("Audio", "Erro de I/O: " + url, e);
+            mediaPlayer = null;
+        } catch (Exception e) {
+            Log.e("Audio", "Erro desconhecido ao configurar o MediaPlayer:", e);
+            mediaPlayer = null;
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (mediaPlayer != null) {
+            mediaPlayer.release();
+            mediaPlayer = null;
+        }
     }
 
     private String getTypesAsString(List<PokemonDetails.Type> types) {
@@ -240,12 +332,11 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
 
     private void loadRelatedPokemonsWithGemini(String pokemonName, String pokemonTypes) {
         try {
-            GenerativeModel geminiModel = new GenerativeModel("gemini-2.5-flash", "");
-
+            GenerativeModel geminiModel = new GenerativeModel("gemini-2.5-flash", "AIzaSyDhQlmvaVvmL4fv_GsJRQndKU-O0dCOY8o");
             GenerativeModelFutures model = GenerativeModelFutures.from(geminiModel);
 
             String prompt = String.format(
-                    "Gere uma descrição atraente entre aspas     de aproximadamente 2 linhas de mobile na fonte 12sp em português para o Pokémon %s (Tipo: %s), e retorne APENAS um JSON válido contendo:\n" +
+                    "Gere uma descrição atraente entre aspas de aproximadamente 2 linhas de mobile na fonte 12sp em português para o Pokémon %s (Tipo: %s), e retorne APENAS um JSON válido contendo:\n" +
                             "1. Uma 'description' (string) com essa descrição.\n" +
                             "2. Uma 'evolutionChain' (array de {name, id}) com a cadeia de evolução completa.\n" +
                             "3. Uma 'similarPokemons' (array de {name, id}) com 4 pokemons parecidos (com nome em minúsculo e ID).\n\n" +
@@ -254,12 +345,11 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
             );
 
             Content content = new Content.Builder().addText(prompt).build();
-
             Executor executor = Executors.newSingleThreadExecutor();
+
             executor.execute(() -> {
                 try {
                     GenerateContentResponse response = model.generateContent(content).get();
-
                     String jsonResponse = response.getText();
 
                     if (jsonResponse != null && !jsonResponse.trim().isEmpty()) {
@@ -267,11 +357,9 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
                     } else {
                         Log.w("Gemini", "Resposta vazia ou nula");
                     }
-
                 } catch (Exception e) {
                     Log.e("Gemini", "Erro ao gerar resposta do Gemini: " + e.getMessage());
-                    e.printStackTrace();
-                    runOnUiThread(() -> loadFallbackData());
+                    runOnUiThread(this::loadFallbackData);
                 }
             });
 
@@ -287,28 +375,22 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
                     .replaceAll("```", "")
                     .trim();
 
-            Log.d("Gemini", "JSON recebido: " + cleanJson);
-
             GeminiResponse geminiResponse = gson.fromJson(cleanJson, GeminiResponse.class);
 
             if (geminiResponse != null) {
                 if (geminiResponse.description != null && !geminiResponse.description.isEmpty()) {
                     descriptionBig.setText(geminiResponse.description);
-                    Log.d("Gemini", "Descrição carregada: " + geminiResponse.description.substring(0, Math.min(geminiResponse.description.length(), 30)) + "...");
                 }
 
                 loadFullPokemonDetailsForList(
                         geminiResponse.evolutionChain,
-                        evolutionAdapter,
-                        loadedEvolutionPokemons
+                        evolutionAdapter
                 );
 
                 loadFullPokemonDetailsForList(
                         geminiResponse.similarPokemons,
-                        similarAdapter,
-                        loadedSimilarPokemons
+                        similarAdapter
                 );
-
             }
         } catch (Exception e) {
             Log.e("Gemini", "Erro ao processar JSON: " + e.getMessage());
@@ -317,20 +399,6 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
         }
     }
 
-    private List<Pokemon> convertToPokemonList(List<GeminiPokemon> geminiPokemons) {
-        List<Pokemon> pokemons = new ArrayList<>();
-
-        for (GeminiPokemon geminiPokemon : geminiPokemons) {
-            if (geminiPokemon.id > 0 && geminiPokemon.id <= 1025) {
-                Pokemon pokemon = new Pokemon();
-                pokemon.setName(geminiPokemon.name.toLowerCase());
-                pokemon.setUrl("https://pokeapi.co/api/v2/pokemon/" + geminiPokemon.id + "/");
-                pokemons.add(pokemon);
-            }
-        }
-
-        return pokemons;
-    }
     private static class GeminiResponse {
         String description;
         List<GeminiPokemon> evolutionChain;
@@ -343,18 +411,15 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
     }
 
     private void loadFallbackData() {
-        Log.d("Gemini", "Carregando dados de fallback para teste");
-        String fallbackJson = "{\"evolutionChain\":[{\"name\":\"pichu\",\"id\":172},{\"name\":\"pikachu\",\"id\":25},{\"name\":\"raichu\",\"id\":26}], \"similarPokemons\":[{\"name\":\"plusle\",\"id\":311},{\"name\":\"minun\",\"id\":312},{\"name\":\"pachirisu\",\"id\":417}]}";
+        String fallbackJson = "{\"description\":\"Um Pokémon de teste em caso de falha de conexão.\", \"evolutionChain\":[{\"name\":\"pichu\",\"id\":172},{\"name\":\"pikachu\",\"id\":25},{\"name\":\"raichu\",\"id\":26}], \"similarPokemons\":[{\"name\":\"plusle\",\"id\":311},{\"name\":\"minun\",\"id\":312},{\"name\":\"pachirisu\",\"id\":417}]}";
         processGeminiResponse(fallbackJson);
     }
 
     private void loadFullPokemonDetailsForList(
             List<GeminiPokemon> geminiPokemons,
-            PokemonAdapter adapter,
-            List<Pokemon> targetList) {
+            PokemonAdapter adapter) {
 
-        targetList.clear();
-
+        List<Pokemon> targetList = new ArrayList<>();
         final int totalPokemons = geminiPokemons.size();
         if (totalPokemons == 0) {
             runOnUiThread(() -> adapter.updatePokemons(targetList));
@@ -371,9 +436,7 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
                 public void onResponse(@NonNull Call<PokemonDetails> call, @NonNull Response<PokemonDetails> response) {
                     if (response.isSuccessful() && response.body() != null) {
                         PokemonDetails details = response.body();
-
-                        Pokemon displayPokemon = convertDetailsToDisplayPokemon(details);
-                        targetList.add(displayPokemon);
+                        targetList.add(convertDetailsToDisplayPokemon(details));
                     }
 
                     if (++loadedCount[0] == totalPokemons) {
@@ -387,7 +450,6 @@ public class PokemonDetailsActivity extends AppCompatActivity implements OnPokem
                 @Override
                 public void onFailure(@NonNull Call<PokemonDetails> call, @NonNull Throwable t) {
                     Log.e("LoadFull", "Falha ao carregar detalhe (ID: " + geminiPokemon.id + "): " + t.getMessage());
-
                     if (++loadedCount[0] == totalPokemons) {
                         runOnUiThread(() -> {
                             targetList.sort((p1, p2) -> Integer.compare(p1.getId(), p2.getId()));
